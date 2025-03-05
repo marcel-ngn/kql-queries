@@ -1,0 +1,12 @@
+SigninLogs
+| where ResultType == "50126" // Failed login
+| summarize FailedAttempts = count(), LastFailedTime = max(TimeGenerated) by UserPrincipalName
+| join kind=inner (
+    SigninLogs
+    | where ResultType == "0" // Successful login
+    | summarize FirstSuccessTime = min(TimeGenerated) by UserPrincipalName
+) on UserPrincipalName
+| where LastFailedTime < FirstSuccessTime
+| where FailedAttempts > 10
+| project UserPrincipalName, FailedAttempts, LastFailedTime, FirstSuccessTime
+| order by FailedAttempts desc
