@@ -1,0 +1,25 @@
+// Detect sign-ins using Azure AD PowerShell module for specific users
+let timeframe = 30d;
+let targetUpns = dynamic(["*UPN*", "*UPN*"]); // Replace with target UPNs
+SigninLogs
+| where TimeGenerated > ago(timeframe)
+| where UserPrincipalName in~ (targetUpns)
+| extend LocationDetails = parse_json(Location)
+| extend DeviceDetails = parse_json(DeviceDetail)
+| project
+    TimeGenerated,
+    UserPrincipalName,
+    AppDisplayName,
+    IPAddress,
+    Location = strcat(tostring(LocationDetails.city), ", ", tostring(LocationDetails.countryOrRegion)),
+    ResultType,
+    ResultDescription,
+    ClientAppUsed,
+    DeviceOS = tostring(DeviceDetails.operatingSystem),
+    DeviceBrowser = tostring(DeviceDetails.browser),
+    RiskLevel = RiskLevelDuringSignIn,
+    RiskDetails = RiskDetail,
+    ConditionalAccessPolicies,
+    AuthenticationDetails,
+    Status
+| order by TimeGenerated desc
