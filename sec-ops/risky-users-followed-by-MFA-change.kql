@@ -1,0 +1,57 @@
+// Detect risky sign-ins followed by MFA changes within 24 hours
+let timeframe = 24h;
+SigninLogs
+| where TimeGenerated > ago(timeframe)
+| where RiskLevelDuringSignIn in ("high", "medium")
+| project 
+    SignInTime = TimeGenerated,
+    UserPrincipalName,
+    RiskLevelDuringSignIn,
+    RiskDetail,
+    Location,
+    IPAddress,
+    UserDisplayName
+| join kind=inner (
+    AuditLogs
+    | where TimeGenerated > ago(timeframe)
+    | where OperationName has_any ("Update user", "Update strongAuthentication")
+    | where Result == "success"
+    | extend ModifiedProperties = TargetResources[0].modifiedProperties
+    | mv-expand ModifiedProperties
+    | extend PropertyName = tostring(ModifiedProperties.displayName)
+    | extend NewValue = tostring(ModifiedProperties.newValue)
+    | extend OldValue = tostring(ModifiedProperties.oldValue)
+    | where PropertyName has_any (
+        "StrongAuthenticationMethod",
+        "StrongAuthenticationPhoneNumber",
+        "StrongAuthenticationUserDetails",
+        "StrongAuthenticationRequirements",
+        "StrongAuthenticationDefaultMethod"
+    )
+    | summarize 
+        MFAUpdateTime = min(TimeGenerated),
+        MFAChanges = make_list(pack(
+            "Property", PropertyName,
+            "OldValue", OldValue,
+            "NewValue", NewValue
+        )) by 
+        UserPrincipalName = tostring(TargetResources[0].userPrincipalName),
+        Operation = OperationName,
+        InitiatedBy = tostring(InitiatedBy.userPrincipalName)  
+) on UserPrincipalName
+| where MFAUpdateTime > SignInTime
+| where (MFAUpdateTime - SignInTime) between (0min .. timeframe)
+| project
+    UserPrincipalName,
+    UserDisplayName,
+    SignInTime,
+    MFAUpdateTime,
+    TimeBetweenEvents = datetime_diff('minute', MFAUpdateTime, SignInTime),
+    RiskLevelDuringSignIn,
+    RiskDetail,
+    SourceIPAddress = IPAddress,
+    Location,
+    Operation,
+    ModifiedBy = InitiatedBy,
+    MFAChanges
+| order by SignInTime asc
