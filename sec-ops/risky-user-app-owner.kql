@@ -1,0 +1,14 @@
+// Identify risky users adding themselves as owners of applications
+AuditLogs
+| where OperationName == "Add owner"  // Focus on 'Add owner' operations
+| where TargetResources[0].type == "Application" // Check if the target resource is an application
+| extend AddedOwner = tostring(TargetResources[0].userPrincipalName) // User added as owner
+| extend Initiator = tostring(InitiatedBy.user.userPrincipalName) // User who initiated the action
+| where AddedOwner == Initiator // Check if the user added themselves
+| join kind=inner (
+    SigninLogs
+    | where RiskLevelDuringSignIn != "none"  // Filter for sign-ins flagged as risky
+    | summarize LatestRiskySignin = max(TimeGenerated), RiskLevelDuringSignIn = any(RiskLevelDuringSignIn) by UserPrincipalName
+) on $left.Initiator == $right.UserPrincipalName
+| project TimeGenerated, Initiator, AddedOwner, TargetAppName = tostring(TargetResources[0].displayName), OperationName, RiskLevelDuringSignIn
+| order by TimeGenerated desc
