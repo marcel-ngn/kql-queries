@@ -1,0 +1,5 @@
+SigninLogs
+| where tostring(LocationDetails.countryOrRegion) in ("CN", "RU", "IR", "KP")  // two letter country code needed here
+| summarize CountryLoginCount = count(), SuccessfulLogins = countif(ResultType == "0"), FailedLogins = countif(ResultType != "0")
+          by UserPrincipalName, Country = tostring(LocationDetails.countryOrRegion)
+| order by CountryLoginCount desc
