@@ -1,0 +1,4 @@
+SigninLogs
+| where TimeGenerated > ago(24h)
+| where AuthenticationProtocol == "deviceCode"
+| summarize by AppDisplayName, UserPrincipalName
