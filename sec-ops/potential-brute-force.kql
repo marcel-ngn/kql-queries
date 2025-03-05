@@ -1,0 +1,6 @@
+SigninLogs
+| where TimeGenerated > ago(24h)
+| where ResultType == '50126' or ResultType == "50053"
+| summarize FailedLoginCount = count() by UserPrincipalName , AppDisplayName
+| order by FailedLoginCount desc 
+| where FailedLoginCount >20
